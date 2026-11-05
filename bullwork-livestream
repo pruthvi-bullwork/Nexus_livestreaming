@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Launcher for the vehicle agent. Layers config in one direction:
+#
+#   /etc/bullwork-livestream/fleet.env   fleet-wide constants (from the package)
+#   $VEHICLE_ENV_FILE                    this vehicle's own values — usually
+#                                        just VID
+#
+# The vehicle file wins, so a unit can override anything without the package
+# being rebuilt.
+set -euo pipefail
+
+FLEET_ENV=/etc/bullwork-livestream/fleet.env
+[ -f "$FLEET_ENV" ] || { echo "missing $FLEET_ENV"; exit 1; }
+set -a
+. "$FLEET_ENV"
+[ -n "${VEHICLE_ENV_FILE:-}" ] && [ -f "$VEHICLE_ENV_FILE" ] && . "$VEHICLE_ENV_FILE"
+set +a
+
+if [ -z "${VID:-}${VEHICLE_ID:-}" ]; then
+  echo "No vehicle id. Expected VEHICLE_ID in ${VEHICLE_ENV_FILE:-the vehicle env file}."
+  exit 1
+fi
+
+# ROS must be sourced in this shell or rclpy will not import.
+if [ "${SOURCE:-}" = "ros" ] && [ -n "${ROS_SETUP:-}" ] && [ -f "$ROS_SETUP" ]; then
+  set +u; . "$ROS_SETUP"; set -u
+fi
+
+echo "starting vehicle agent — ${VID:-$VEHICLE_ID} source=${SOURCE:-?} broker=${MQTT_BROKER_HOST:-${MQTT_HOST:-?}}"
+exec /usr/bin/python3 /opt/bullwork-livestream/vehicle_agent.py
